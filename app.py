@@ -29,7 +29,7 @@ def charger_donnees():
     if os.path.exists(FICHIER_DONNEES):
         return pd.read_csv(FICHIER_DONNEES)
     else:
-        return pd.DataFrame(columns=["Date", "Catégorie", "Message", "Note", "Urgence", "Image"])
+        return pd.DataFrame(columns=["Date", "Auteur", "Catégorie", "Message", "Note", "Urgence", "Image"])
 
 # Fonction pour lire le message de succès
 def lire_succes():
@@ -62,54 +62,58 @@ col1, col2 = st.columns([2, 1])
 with col1:
     st.subheader("📝 Exprimer un avis ou un problème")
     
-    with st.form("formulaire_avis"):
-        # Case Urgence stylisée
-        est_urgent = st.checkbox("🚨 C'est une URGENCE ")
-        
-        categorie = st.selectbox(
-            "Sujet :",
-            ["Cours & Profs 📚", "Locaux & Matériel 🏫", "Ambiance & Vie Scolaire 🎉", "Autre 💡"]
-        )
+    # --- AJOUT : LE CHOIX DE L'IDENTITÉ ---
+    choix_identite = st.radio("Protocole d'identité :", ["Mode Anonyme 🕵️‍", "Mode Identifié (Nom/Prénom) 👤"], horizontal=True)
+    
+    auteur_msg = "Anonyme" # Valeur par défaut
+    if choix_identite == "Mode Identifié (Nom/Prénom) 👤":
+        auteur_msg = st.text_input("Entrez votre Matricule / Nom :", placeholder="Ex: Sarah Connor")
+    # --------------------------------------
 
+    with st.form("formulaire_bot"):
+        est_urgent = st.checkbox("🚨 C'est une URGENCE")
+        categorie = st.selectbox("Sujet du rapport :", ["Cours & Profs 📚", "Locaux & Matériel 🏫", "Ambiance & Vie Scolaire 🎉", "Autre 💡"])
         message = st.text_area("Détails du message :")
         
-        cols_note = st.columns(2)
-        with cols_note[0]:
-            note = st.slider("Satisfaction globale :", 1, 5, 3)
-        with cols_note[1]:
-            photo = st.file_uploader("Preuve (Photo)", type=['png', 'jpg', 'jpeg'])
+        st.write("Niveau de satisfaction :")
+        note = st.slider("Scanner satisfaction", 1, 5, 3)
+        if note == 1: st.warning(" Tres insatisfait !")
+        elif note == 3: st.info(" Moyen ")
+        elif note == 5: st.success(" Tres satisfait")
+        
+        photo = st.file_uploader("Preuve (Photo) 📸", type=['png', 'jpg', 'jpeg', 'pdf'])
+        
+        submit = st.form_submit_button("Envoyer mon avis 🚀")
 
-        submit_btn = st.form_submit_button("Envoyer mon avis 🚀")
-
-    if submit_btn:
-        if message:
+    if submit:
+        # Vérification : Si mode identifié choisi mais nom vide -> Erreur
+        if choix_identite == "Mode Identifié (Nom/Prénom) 👤" and auteur_msg == "":
+            st.error("⚠️ Erreur protocole : Identité requise (champ vide) !")
+        elif message:
             date_actuelle = datetime.now().strftime("%Y-%m-%d %H:%M")
             nom_image = "Aucune"
-            if photo is not None:
-                chemin_image = os.path.join(DOSSIER_IMAGES, photo.name)
-                with open(chemin_image, "wb") as f:
-                    f.write(photo.getbuffer())
+            if photo:
+                chemin = os.path.join(DOSSIER_IMAGES, photo.name)
+                with open(chemin, "wb") as f: f.write(photo.getbuffer())
                 nom_image = photo.name
-
-            txt_urgence = "🚨 OUI" if est_urgent else "Non"
-
-            nouvelle_donnee = pd.DataFrame({
-                "Date": [date_actuelle],
-                "Catégorie": [categorie],
-                "Message": [message],
-                "Note": [note],
-                "Urgence": [txt_urgence],
-                "Image": [nom_image]
+            
+            txt_urg = "🚨 OUI" if est_urgent else "Non"
+            
+            # Création de la ligne avec l'auteur
+            new_df = pd.DataFrame({
+                "Date":[date_actuelle], 
+                "Auteur": [auteur_msg], # On enregistre le nom ici
+                "Catégorie":[categorie], 
+                "Message":[message], 
+                "Note":[note], 
+                "Urgence":[txt_urg], 
+                "Image":[nom_image]
             })
             
             df = charger_donnees()
-            df = pd.concat([df, nouvelle_donnee], ignore_index=True)
+            df = pd.concat([df, new_df], ignore_index=True)
             df.to_csv(FICHIER_DONNEES, index=False)
             
-            st.success("Merci ! Ton avis a été enregistré.")
-            st.balloons() # Petite animation sympa
-        else:
-            st.error("Le message est vide !")
 
 with col2:
     st.warning(" 👋 Bienvenue ! \n\nCet espace est anonyme. Si tu coches 'Urgence', les délégués seront averti en priorité.")
